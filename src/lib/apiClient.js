@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { warmupServer, isLikelyColdStartError } from './serverWarmup.js';
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
+const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 const isProd = import.meta.env.PROD;
 
 // Single axios instance. `withCredentials` is required so the httpOnly

@@ -4,7 +4,8 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../../lib/apiClient.js';
 import { useAuth } from '../../context/AuthContext.jsx';
-import { Button, Card, Badge, Loading, EmptyState, Spinner, Input, Field, Textarea } from '../../components/ui.jsx';
+import { Button, Card, Badge, Loading, EmptyState, Spinner, Input, Field } from '../../components/ui.jsx';
+import ContactForm from '../../components/ContactForm.jsx';
 import { taka, fmtDate, fmtRange, apiError } from '../../utils/format.js';
 import { todayKeyDhaka, isUserBookableSlot } from '../../utils/slots.js';
 
@@ -272,56 +273,6 @@ function MapSection({ venue }) {
   );
 }
 
-function ContactSection({ venue }) {
-  const [form, setForm] = useState({ name: '', email: '', message: '' });
-  const [sending, setSending] = useState(false);
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  const submit = async (e) => {
-    e.preventDefault();
-    setSending(true);
-    try {
-      await api.post('/contact', form);
-      toast.success('Thanks! We will get back to you shortly.');
-      setForm({ name: '', email: '', message: '' });
-    } catch (err) {
-      toast.error(apiError(err, 'Could not send message'));
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <section id="contact" className="border-t border-ink-800 bg-ink-900/30">
-      <div className="mx-auto grid max-w-7xl gap-12 px-6 py-20 md:grid-cols-2">
-        <div>
-          <SectionHeading kicker="Contact" title="Get in touch" subtitle="Questions about bookings or events? Reach out." />
-          <div className="mt-8 space-y-4 text-ink-300">
-            <p className="flex items-center gap-3">📞 <span>{venue?.contactPhone || '01700-000000'}</span></p>
-            <p className="flex items-center gap-3">✉️ <span>{venue?.contactEmail || 'hello@turf.example'}</span></p>
-            <p className="flex items-center gap-3">📍 <span>{venue?.address || 'Gulshan Avenue, Dhaka'}</span></p>
-            <p className="flex items-center gap-3">🕒 <span>{venue?.openingTime || '06:00'} – {venue?.closingTime || '23:59'} daily</span></p>
-          </div>
-        </div>
-        <Card className="p-6">
-          <form onSubmit={submit} className="space-y-4">
-            <Field label="Your name">
-              <Input required placeholder="Your name" value={form.name} onChange={set('name')} />
-            </Field>
-            <Field label="Your email">
-              <Input required type="email" placeholder="Your email" value={form.email} onChange={set('email')} />
-            </Field>
-            <Field label="Your message">
-              <Textarea required placeholder="Your message" className="min-h-[120px]" value={form.message} onChange={set('message')} />
-            </Field>
-            <Button type="submit" className="w-full" loading={sending}>Send message</Button>
-          </form>
-        </Card>
-      </div>
-    </section>
-  );
-}
-
 export default function LandingPage() {
   const { data: venues, isLoading } = useQuery({
     queryKey: ['venues'],
@@ -344,7 +295,7 @@ export default function LandingPage() {
       <BookingSection venue={venue} />
       <EventsSection />
       <MapSection venue={venue} />
-      <ContactSection venue={venue} />
+      <ContactForm venue={venue} />
     </>
   );
 }
