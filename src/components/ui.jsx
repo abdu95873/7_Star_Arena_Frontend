@@ -25,14 +25,30 @@ export function Button({ as: Comp = 'button', variant = 'primary', loading, clas
   );
 }
 
-export const Input = forwardRef(function Input({ className = '', error, ...props }, ref) {
+function CalendarIcon({ className = 'h-4 w-4' }) {
   return (
-    <input
-      ref={ref}
-      className={`input ${error ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30' : ''} ${className}`}
-      {...props}
-    />
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.75" />
+      <path d="M8 3v4M16 3v4M3 10h18" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
   );
+}
+
+export const Input = forwardRef(function Input({ className = '', error, type, ...props }, ref) {
+  const inputClass = `input ${error ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30' : ''} ${className}`;
+
+  if (type === 'date') {
+    return (
+      <div className="relative">
+        <input ref={ref} type="date" className={`date-input ${inputClass}`} {...props} />
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white">
+          <CalendarIcon />
+        </span>
+      </div>
+    );
+  }
+
+  return <input ref={ref} type={type} className={inputClass} {...props} />;
 });
 
 export const Textarea = forwardRef(function Textarea({ className = '', error, ...props }, ref) {
@@ -78,12 +94,19 @@ export function Badge({ tone = 'gray', children }) {
   return <span className={`badge ${tones[tone] || tones.gray}`}>{children}</span>;
 }
 
-export function Modal({ open, onClose, title, children, footer }) {
+const MODAL_SIZES = {
+  md: 'max-w-md',
+  lg: 'max-w-2xl',
+  xl: 'max-w-4xl',
+  '2xl': 'max-w-6xl',
+};
+
+export function Modal({ open, onClose, title, children, footer, size = 'md' }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="card relative z-10 w-full max-w-md animate-fade-in p-6">
+      <div className={`card relative z-10 w-full ${MODAL_SIZES[size] || MODAL_SIZES.md} animate-fade-in p-6`}>
         {title && <h3 className="mb-3 text-lg font-bold text-white">{title}</h3>}
         <div className="text-sm text-ink-300">{children}</div>
         {footer && <div className="mt-6 flex justify-end gap-3">{footer}</div>}

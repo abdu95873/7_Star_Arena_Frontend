@@ -11,6 +11,7 @@ const nav = [
   { to: '/admin/venues', label: 'Venues', icon: '🏟️' },
   { to: '/admin/events', label: 'Events', icon: '🏆' },
   { to: '/admin/finance', label: 'Finance', icon: '💳' },
+  { to: '/admin/contact', label: 'Messages', icon: '✉️' },
   { to: '/admin/settings', label: 'Settings', icon: '⚙️' },
 ];
 

@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { format } from 'date-fns';
 import api from '../../lib/apiClient.js';
 import { useAuth } from '../../context/AuthContext.jsx';
-import { Button, Card, Badge, Loading, EmptyState, Spinner } from '../../components/ui.jsx';
+import { Button, Card, Badge, Loading, EmptyState, Spinner, Input, Field, Textarea } from '../../components/ui.jsx';
 import { taka, fmtDate, fmtRange, apiError } from '../../utils/format.js';
+import { todayKeyDhaka, isUserBookableSlot } from '../../utils/slots.js';
 
 const HERO_BG = 'https://images.unsplash.com/photo-1551958219-acbc608c6377?w=1600';
 const GALLERY = [
@@ -74,7 +74,7 @@ function SectionHeading({ kicker, title, subtitle }) {
 function BookingSection({ venue }) {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [date, setDate] = useState(todayKeyDhaka());
   const [selected, setSelected] = useState([]);
 
   const { data, isLoading } = useQuery({
@@ -84,8 +84,20 @@ function BookingSection({ venue }) {
   });
 
   const slots = data || [];
+  const visibleSlots = useMemo(
+    () => slots.filter((s) => s.status === 'booked' || isUserBookableSlot(s)),
+    [slots],
+  );
+
+  useEffect(() => {
+    setSelected((prev) => prev.filter((id) => {
+      const s = slots.find((x) => x._id === id);
+      return s && isUserBookableSlot(s);
+    }));
+  }, [slots]);
+
   const toggle = (slot) => {
-    if (slot.status !== 'available') return;
+    if (!isUserBookableSlot(slot)) return;
     setSelected((prev) => (prev.includes(slot._id) ? prev.filter((id) => id !== slot._id) : [...prev, slot._id]));
   };
 
@@ -112,7 +124,7 @@ function BookingSection({ venue }) {
     createBooking.mutate();
   };
 
-  const minDate = format(new Date(), 'yyyy-MM-dd');
+  const minDate = todayKeyDhaka();
 
   return (
     <section id="book" className="border-y border-ink-800 bg-ink-900/30">
@@ -123,12 +135,12 @@ function BookingSection({ venue }) {
           <div className="lg:col-span-2">
             <div className="mb-5 flex flex-wrap items-center gap-4">
               <label className="text-sm font-medium text-ink-300">Date</label>
-              <input
+              <Input
                 type="date"
                 min={minDate}
                 value={date}
                 onChange={(e) => { setDate(e.target.value); setSelected([]); }}
-                className="input max-w-[200px]"
+                className="max-w-[200px]"
               />
               <div className="flex items-center gap-4 text-xs text-ink-400">
                 <span className="flex items-center gap-1.5"><i className="h-3 w-3 rounded-full bg-turf-500" /> Available</span>
@@ -139,29 +151,31 @@ function BookingSection({ venue }) {
 
             {isLoading ? (
               <Loading label="Loading slots…" />
-            ) : slots.length === 0 ? (
+            ) : visibleSlots.length === 0 ? (
               <EmptyState icon="📅" title="No slots for this date" description="Try another date or check back soon." />
             ) : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                {slots.map((slot) => {
+                {visibleSlots.map((slot) => {
                   const isSel = selected.includes(slot._id);
-                  const isAvail = slot.status === 'available';
+                  const bookable = isUserBookableSlot(slot);
+                  const isBooked = slot.status === 'booked';
                   return (
                     <button
                       key={slot._id}
+                      type="button"
                       onClick={() => toggle(slot)}
-                      disabled={!isAvail}
+                      disabled={!bookable}
                       className={`rounded-xl border p-3 text-left text-sm transition ${
                         isSel
                           ? 'border-accent-500 bg-accent-500/15 text-white'
-                          : isAvail
+                          : bookable
                           ? 'border-ink-700 bg-ink-900 hover:border-turf-500 hover:bg-turf-500/5'
-                          : 'cursor-not-allowed border-ink-800 bg-ink-800/40 text-ink-600'
+                          : 'cursor-not-allowed border-ink-800 bg-ink-800/40 text-ink-600 opacity-70'
                       }`}
                     >
                       <div className="font-semibold">{fmtRange(slot.startTime, slot.endTime)}</div>
                       <div className="text-xs text-ink-400">{taka(slot.price)}</div>
-                      {!isAvail && <div className="mt-1 text-[10px] uppercase text-ink-600">Booked</div>}
+                      {isBooked && <div className="mt-1 text-[10px] uppercase text-ink-600">Booked</div>}
                     </button>
                   );
                 })}
@@ -259,11 +273,24 @@ function MapSection({ venue }) {
 }
 
 function ContactSection({ venue }) {
-  const submit = (e) => {
+  const [form, setForm] = useState({ name: '', email: '', message: '' });
+  const [sending, setSending] = useState(false);
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const submit = async (e) => {
     e.preventDefault();
-    toast.success('Thanks! We will get back to you shortly.');
-    e.target.reset();
+    setSending(true);
+    try {
+      await api.post('/contact', form);
+      toast.success('Thanks! We will get back to you shortly.');
+      setForm({ name: '', email: '', message: '' });
+    } catch (err) {
+      toast.error(apiError(err, 'Could not send message'));
+    } finally {
+      setSending(false);
+    }
   };
+
   return (
     <section id="contact" className="border-t border-ink-800 bg-ink-900/30">
       <div className="mx-auto grid max-w-7xl gap-12 px-6 py-20 md:grid-cols-2">
@@ -278,10 +305,16 @@ function ContactSection({ venue }) {
         </div>
         <Card className="p-6">
           <form onSubmit={submit} className="space-y-4">
-            <input required placeholder="Your name" className="input" />
-            <input required type="email" placeholder="Your email" className="input" />
-            <textarea required placeholder="Your message" className="input min-h-[120px]" />
-            <Button type="submit" className="w-full">Send message</Button>
+            <Field label="Your name">
+              <Input required placeholder="Your name" value={form.name} onChange={set('name')} />
+            </Field>
+            <Field label="Your email">
+              <Input required type="email" placeholder="Your email" value={form.email} onChange={set('email')} />
+            </Field>
+            <Field label="Your message">
+              <Textarea required placeholder="Your message" className="min-h-[120px]" value={form.message} onChange={set('message')} />
+            </Field>
+            <Button type="submit" className="w-full" loading={sending}>Send message</Button>
           </form>
         </Card>
       </div>

@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import api from '../../lib/apiClient.js';
 import { Button, Card, Badge, Loading, ErrorState, EmptyState, Modal, Field, Input, Select } from '../../components/ui.jsx';
 import { taka, fmtDate, fmtDateTime, fmtRange, statusTone, apiError } from '../../utils/format.js';
+import { isAdminBookableSlot, todayKeyDhaka, shouldHideBookingActions, isBookingFullyEnded } from '../../utils/slots.js';
 
 export default function AdminBookingsPage() {
   const qc = useQueryClient();
@@ -20,9 +21,14 @@ export default function AdminBookingsPage() {
   });
 
   const mutate = useMutation({
-    mutationFn: async ({ type, booking, amount }) => {
+    mutationFn: async ({ type, booking, amount, discount }) => {
       if (type === 'cancel') return api.patch(`/admin/bookings/${booking._id}/cancel`);
-      if (type === 'mark-paid') return api.patch(`/admin/bookings/${booking._id}/mark-paid`, amount ? { amount } : {});
+      if (type === 'mark-paid') {
+        return api.patch(`/admin/bookings/${booking._id}/mark-paid`, {
+          amount: amount ?? 0,
+          discount: discount ?? 0,
+        });
+      }
       if (type === 'mark-absent') return api.patch(`/admin/bookings/${booking._id}/mark-absent`);
       if (type === 'refund') return api.post(`/admin/bookings/${booking._id}/refund`, amount ? { amount } : {});
       return null;
@@ -90,6 +96,7 @@ export default function AdminBookingsPage() {
                   </td>
                   <td className="p-3">
                     <div className="text-ink-100">{taka(b.totalAmount)}</div>
+                    {b.discount > 0 && <div className="text-xs text-turf-400">Disc −{taka(b.discount)}</div>}
                     <div className="text-xs text-ink-500">Due {taka(b.dueAmount)}</div>
                   </td>
                   <td className="p-3 space-y-1">
@@ -98,11 +105,14 @@ export default function AdminBookingsPage() {
                   </td>
                   <td className="p-3 text-xs text-ink-400">{fmtDateTime(b.createdAt)}</td>
                   <td className="p-3">
+                    {shouldHideBookingActions(b) ? (
+                      <span className="block text-right text-xs text-ink-600">Completed</span>
+                    ) : (
                     <div className="flex flex-wrap justify-end gap-1.5">
                       {b.dueAmount > 0 && b.bookingStatus !== 'cancelled' && (
-                        <button className="rounded bg-turf-500/15 px-2 py-1 text-xs text-turf-300 hover:bg-turf-500/25" onClick={() => setAction({ type: 'mark-paid', booking: b })}>Mark paid</button>
+                        <button className="rounded bg-turf-500/15 px-2 py-1 text-xs text-turf-300 hover:bg-turf-500/25" onClick={() => setAction({ type: 'mark-paid', booking: b })}>Pay due</button>
                       )}
-                      {['pending', 'confirmed'].includes(b.bookingStatus) && (
+                      {['pending', 'confirmed'].includes(b.bookingStatus) && !isBookingFullyEnded(b) && (
                         <button className="rounded bg-ink-700/50 px-2 py-1 text-xs text-ink-200 hover:bg-ink-700" onClick={() => setAction({ type: 'mark-absent', booking: b })}>No-show</button>
                       )}
                       {b.advancePaid > 0 && b.paymentStatus !== 'refunded' && (
@@ -112,6 +122,7 @@ export default function AdminBookingsPage() {
                         <button className="rounded bg-red-500/15 px-2 py-1 text-xs text-red-300 hover:bg-red-500/25" onClick={() => setAction({ type: 'cancel', booking: b })}>Cancel</button>
                       )}
                     </div>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -124,7 +135,7 @@ export default function AdminBookingsPage() {
         key={action ? `${action.type}-${action.booking._id}` : 'none'}
         action={action}
         onClose={() => setAction(null)}
-        onConfirm={(amount) => mutate.mutate({ ...action, amount })}
+        onConfirm={(amount, discount) => mutate.mutate({ ...action, amount, discount })}
         loading={mutate.isPending}
       />
 
@@ -142,20 +153,57 @@ export default function AdminBookingsPage() {
 }
 
 function ActionModal({ action, onClose, onConfirm, loading }) {
-  // Pre-fill the amount with the relevant default: full due for mark-paid,
-  // full advance for refund. The parent remounts this via `key` per action.
+  const due = action?.type === 'mark-paid' ? Number(action.booking.dueAmount || 0) : 0;
+
   const [amount, setAmount] = useState(() => {
     if (action?.type === 'mark-paid') return String(action.booking.dueAmount ?? '');
     if (action?.type === 'refund') return String(action.booking.advancePaid ?? '');
     return '';
   });
+  const [discount, setDiscount] = useState('0');
+  const amountTouched = useRef(false);
+
+  const discountNum = action?.type === 'mark-paid'
+    ? Math.min(Math.max(0, Number(discount) || 0), due)
+    : 0;
+  const collectAfterDiscount = Math.max(0, due - discountNum);
+  const remainingAfterSubmit = Math.max(0, due - discountNum - (Number(amount) || 0));
+
+  const handleDiscountChange = (value) => {
+    setDiscount(value);
+    if (!amountTouched.current) {
+      const nextDiscount = Math.min(Math.max(0, Number(value) || 0), due);
+      setAmount(String(Math.max(0, due - nextDiscount)));
+    }
+  };
+
   if (!action) return null;
   const labels = {
     cancel: { title: 'Cancel booking', body: 'This will cancel the booking and release its slots.', cta: 'Cancel booking', variant: 'danger' },
-    'mark-paid': { title: 'Collect due payment', body: 'Defaults to the full outstanding due. Adjust the amount for a partial payment.', cta: 'Mark paid', variant: 'primary', amount: true },
+    'mark-paid': {
+      title: 'Collect due payment',
+      body: 'Apply an optional discount, then enter the cash collected. Amount defaults to due minus discount.',
+      cta: 'Pay due',
+      variant: 'primary',
+      amount: true,
+      discount: true,
+    },
     'mark-absent': { title: 'Mark as no-show', body: 'Flag this booking as a no-show.', cta: 'Mark no-show', variant: 'outline' },
     refund: { title: 'Refund booking', body: 'Defaults to the full advance paid. Adjust for a partial refund.', cta: 'Process refund', variant: 'primary', amount: true },
   }[action.type];
+
+  const submitMarkPaid = () => {
+    const pay = Number(amount) || 0;
+    if (pay <= 0 && discountNum <= 0) {
+      toast.error('Enter an amount to collect or apply a discount');
+      return;
+    }
+    if (pay + discountNum > due) {
+      toast.error(`Discount + amount cannot exceed due (${taka(due)})`);
+      return;
+    }
+    onConfirm(pay, discountNum);
+  };
 
   return (
     <Modal
@@ -165,13 +213,46 @@ function ActionModal({ action, onClose, onConfirm, loading }) {
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Close</Button>
-          <Button variant={labels.variant} loading={loading} onClick={() => onConfirm(amount ? Number(amount) : undefined)}>{labels.cta}</Button>
+          <Button
+            variant={labels.variant}
+            loading={loading}
+            onClick={() => (action.type === 'mark-paid' ? submitMarkPaid() : onConfirm(amount ? Number(amount) : undefined))}
+          >
+            {labels.cta}
+          </Button>
         </>
       }
     >
       <p>{labels.body}</p>
+      {labels.discount && (
+        <div className="mt-3 space-y-2">
+          <Field label={`Outstanding due: ${taka(due)}`}>
+            <Input type="number" min={0} max={due} placeholder="Discount (BDT)" value={discount} onChange={(e) => handleDiscountChange(e.target.value)} />
+          </Field>
+          {discountNum > 0 && (
+            <p className="text-xs text-turf-300">Suggested collection after discount: {taka(collectAfterDiscount)}</p>
+          )}
+        </div>
+      )}
       {labels.amount && (
-        <Input type="number" min={0} placeholder="Amount (BDT)" className="mt-3" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <div className="mt-3 space-y-2">
+          <Field label={labels.discount ? 'Amount collected (BDT)' : 'Amount (BDT)'}>
+            <Input
+              type="number"
+              min={0}
+              max={labels.discount ? collectAfterDiscount : undefined}
+              placeholder="Amount (BDT)"
+              value={amount}
+              onChange={(e) => {
+                amountTouched.current = true;
+                setAmount(e.target.value);
+              }}
+            />
+          </Field>
+          {labels.discount && (discountNum > 0 || Number(amount) > 0) && (
+            <p className="text-xs text-ink-500">Remaining due after this: {taka(remainingAfterSubmit)}</p>
+          )}
+        </div>
       )}
     </Modal>
   );
@@ -190,7 +271,7 @@ function NewBookingModal({ onClose, onCreated }) {
 
   // Slots
   const [venueId, setVenueId] = useState('');
-  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [date, setDate] = useState(todayKeyDhaka());
   const [slotIds, setSlotIds] = useState([]);
 
   // Payment / contact
@@ -217,11 +298,11 @@ function NewBookingModal({ onClose, onCreated }) {
 
   const { data: slotData, isFetching: loadingSlots } = useQuery({
     queryKey: ['admin-available-slots', venueId, date],
-    queryFn: async () => (await api.get(`/admin/slots?venueId=${venueId}&date=${date}&status=available`)).data.data,
+    queryFn: async () => (await api.get(`/admin/slots?venueId=${venueId}&date=${date}&status=available&forBooking=true`)).data.data,
     enabled: Boolean(venueId && date),
   });
 
-  const slots = slotData?.slots || [];
+  const slots = (slotData?.slots || []).filter((s) => isAdminBookableSlot(s));
   const selectedSlots = useMemo(() => slots.filter((s) => slotIds.includes(s._id)), [slots, slotIds]);
   const total = selectedSlots.reduce((sum, s) => sum + s.price, 0);
   const advanceDue = selectedSlots.reduce((sum, s) => sum + (s.minimumBookingAmount || 0), 0);
@@ -347,8 +428,13 @@ function NewBookingModal({ onClose, onCreated }) {
                 return (
                   <button
                     key={s._id}
+                    type="button"
                     onClick={() => toggleSlot(s._id)}
-                    className={`rounded-lg border p-2 text-left text-xs transition ${on ? 'border-turf-500 bg-turf-500/15 text-turf-100' : 'border-ink-800 bg-ink-900/40 text-ink-300 hover:border-ink-700'}`}
+                    className={`rounded-lg border p-2 text-left text-xs transition ${
+                      on
+                        ? 'border-turf-500 bg-turf-500/15 text-turf-100'
+                        : 'border-ink-800 bg-ink-900/40 text-ink-300 hover:border-ink-700'
+                    }`}
                   >
                     <div className="font-medium">{fmtRange(s.startTime, s.endTime)}</div>
                     <div className="text-ink-500">{taka(s.price)}</div>

@@ -27,6 +27,7 @@ import AdminSlotsPage from './pages/admin/AdminSlotsPage.jsx';
 import AdminVenuesPage from './pages/admin/AdminVenuesPage.jsx';
 import AdminEventsPage from './pages/admin/AdminEventsPage.jsx';
 import FinancePage from './pages/admin/FinancePage.jsx';
+import AdminContactPage from './pages/admin/AdminContactPage.jsx';
 import SettingsPage from './pages/admin/SettingsPage.jsx';
 
 export default function App() {
@@ -79,6 +80,7 @@ export default function App() {
           <Route path="venues" element={<AdminVenuesPage />} />
           <Route path="events" element={<AdminEventsPage />} />
           <Route path="finance" element={<FinancePage />} />
+          <Route path="contact" element={<AdminContactPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
 

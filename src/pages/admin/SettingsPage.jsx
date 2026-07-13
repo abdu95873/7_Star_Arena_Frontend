@@ -23,6 +23,7 @@ export default function SettingsPage() {
     mutationFn: async () => api.patch('/admin/settings', {
       cancellationWindowHours: Number(form.cancellationWindowHours),
       pendingBookingExpiryMinutes: Number(form.pendingBookingExpiryMinutes),
+      adminLateBookingGraceMinutes: Number(form.adminLateBookingGraceMinutes),
       allowUserSelfCancel: form.allowUserSelfCancel,
     }),
     onSuccess: () => { toast.success('Settings saved'); qc.invalidateQueries({ queryKey: ['settings'] }); },
@@ -47,6 +48,10 @@ export default function SettingsPage() {
         <Field label="Pending booking expiry (minutes)" hint="Unpaid reservations are released after this many minutes.">
           <Input type="number" min={1} value={form.pendingBookingExpiryMinutes} disabled={!isAdmin}
             onChange={(e) => setForm((f) => ({ ...f, pendingBookingExpiryMinutes: e.target.value }))} />
+        </Field>
+        <Field label="Admin late booking grace (minutes)" hint="After a slot starts, admins/staff can still book for this many minutes. Users cannot book once a slot has started.">
+          <Input type="number" min={0} value={form.adminLateBookingGraceMinutes ?? 30} disabled={!isAdmin}
+            onChange={(e) => setForm((f) => ({ ...f, adminLateBookingGraceMinutes: e.target.value }))} />
         </Field>
         <label className="flex items-center gap-3 text-sm text-ink-200">
           <input type="checkbox" checked={form.allowUserSelfCancel} disabled={!isAdmin}

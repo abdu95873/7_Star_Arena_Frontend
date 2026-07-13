@@ -36,6 +36,27 @@
   .input {
     @apply w-full rounded-lg border border-ink-700 bg-ink-900 px-3.5 py-2.5 text-sm text-ink-100 placeholder-ink-500 transition focus:border-turf-500 focus:outline-none focus:ring-2 focus:ring-turf-500/30;
   }
+  .date-input {
+    @apply relative pr-10;
+    color-scheme: dark;
+  }
+  .date-input::-webkit-calendar-picker-indicator {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    width: 1.75rem;
+    height: 1.75rem;
+    transform: translateY(-50%);
+    opacity: 0;
+    cursor: pointer;
+  }
+  select.input {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' viewBox='0 0 24 24' stroke='%23e2e8f0' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2.25rem;
+  }
   .label {
     @apply mb-1.5 block text-sm font-medium text-ink-300;
   }
