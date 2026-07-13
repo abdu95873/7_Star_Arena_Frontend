@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import api, { setAccessToken, registerAuthHandlers } from '../lib/apiClient.js';
+import toast from 'react-hot-toast';
+import api, { setAccessToken, registerAuthHandlers, warmupServer } from '../lib/apiClient.js';
 
 const AuthContext = createContext(null);
 
@@ -16,7 +17,12 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let active = true;
     (async () => {
+      const slowTimer = setTimeout(() => {
+        if (active) toast.loading('Server is starting up…', { id: 'server-warmup' });
+      }, 2500);
+
       try {
+        await warmupServer();
         const { data } = await api.post('/auth/refresh');
         const token = data?.data?.accessToken;
         if (token) {
@@ -27,6 +33,8 @@ export function AuthProvider({ children }) {
       } catch {
         /* no active session */
       } finally {
+        clearTimeout(slowTimer);
+        toast.dismiss('server-warmup');
         if (active) setLoading(false);
       }
     })();

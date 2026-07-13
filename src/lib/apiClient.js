@@ -1,13 +1,15 @@
 import axios from 'axios';
+import { warmupServer, isLikelyColdStartError } from './serverWarmup.js';
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
+const isProd = import.meta.env.PROD;
 
 // Single axios instance. `withCredentials` is required so the httpOnly
 // refresh-token cookie is sent on /auth/refresh.
 const api = axios.create({
   baseURL,
   withCredentials: true,
-  timeout: 20000,
+  timeout: isProd ? 90000 : 20000,
 });
 
 let accessToken = null;
@@ -34,6 +36,12 @@ api.interceptors.response.use(
     const original = error.config;
     const status = error.response?.status;
     const url = original?.url || '';
+
+    if (!original?._coldRetry && isLikelyColdStartError(error) && isProd) {
+      original._coldRetry = true;
+      const awake = await warmupServer({ attempts: 2 });
+      if (awake) return api(original);
+    }
 
     const isAuthRoute = url.includes('/auth/login') || url.includes('/auth/refresh') || url.includes('/auth/register');
 
@@ -64,3 +72,4 @@ api.interceptors.response.use(
 );
 
 export default api;
+export { warmupServer };
