@@ -14,7 +14,10 @@ export function contactErrorMessage(err, fallback = 'Could not send message. Ple
   const body = err?.response?.data;
 
   if (status === 404) {
-    return 'Server route not found. Restart the backend (npm run dev in server folder) and try again.';
+    if (import.meta.env.DEV) {
+      return 'Server route not found. Restart the backend (npm run dev in server folder) and try again.';
+    }
+    return 'Contact form is temporarily unavailable. Please call or email us directly.';
   }
   if (status === 429) {
     return 'Too many messages sent. Please wait a while before trying again.';
