@@ -4,11 +4,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import App from './App.jsx';
-import { warmupServer } from './lib/serverWarmup.js';
+import { warmupServer, startKeepAliveInterval } from './lib/serverWarmup.js';
 import './index.css';
 
 if (import.meta.env.PROD) {
   warmupServer().catch(() => {});
+  startKeepAliveInterval();
 }
 
 const queryClient = new QueryClient({

@@ -36,3 +36,17 @@ export function isLikelyColdStartError(error) {
     || msg.includes('timeout')
   );
 }
+
+/** Ping the backend periodically while the site tab is open (production only). */
+export function startKeepAliveInterval({ intervalMs = 12 * 60 * 1000 } = {}) {
+  if (import.meta.env.DEV) return () => {};
+
+  const tick = () => {
+    if (document.visibilityState === 'visible') {
+      warmupServer({ attempts: 1, timeoutMs: 60000 }).catch(() => {});
+    }
+  };
+
+  const id = setInterval(tick, intervalMs);
+  return () => clearInterval(id);
+}
